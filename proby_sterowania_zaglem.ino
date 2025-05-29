@@ -17,10 +17,17 @@
 //Pin do wysterowania przekaźnika załączającego silnik 
 #define RELAY_PIN 7
 
-long sail_trim = 0;
+//zmienne do obsługi przerwań impulsatora
 unsigned long time = 0;
 long count = 0;
 long num = 0;
+
+
+volatile int encoderPos = 0; // Aktualna pozycja enkodera (0-19)
+int prevEncoderPos = 0;
+
+int windDirectionDegrees = 0; // 0-359 stopni
+
 Servo sailServo;
 
 void setup() {
@@ -37,8 +44,8 @@ void setup() {
 
 
 
-  attachInterrupt(0, blinkA, LOW);
-  attachInterrupt(1, blinkB, LOW);
+  attachInterrupt(0, obrot_lewo , LOW);
+  attachInterrupt(1, obrot_prawo, LOW);
 
   time = millis();
 
@@ -57,8 +64,17 @@ void loop() {
   Serial.print("    ");
   delay(10);
 
-  if(SW1_value > 1200){
+
+  /*
+  TODO:
+  # ogarnij jakie pozycje switcha robią co
+  # zaimplementuj zerowanie wiatrowskazu
+  */
+  if(SW1_value > 1200 && SW1_value < 1500){ // załączenie silnika
     digitalWrite(RELAY_PIN, HIGH);
+  }
+  else if(SW1_value > 1500){
+    digitalWrite(RELAY_PIN, LOW);
 
   }
   else{
@@ -86,16 +102,42 @@ void loop() {
   delay(20);  
 }
 
-void blinkA() {
+void obrot_lewo() {
   if ((millis() - time) > 30){
     count++;
-    
+    encoderPos = (encoderPos + 1) % 20;
   }
   time = millis();
 }
 
-void blinkB() {
-  if ((millis() - time) > 30)
+void obrot_prawo() {
+  if ((millis() - time) > 30){
     count--;
+    encoderPos = (encoderPos + 1) % 20;
+  }
   time = millis();
+}
+
+
+int calculateSailAngle(int windAngle) {
+  int servoAngle = 90;
+
+  // Tutaj wstaw logikę z tabeli optymalnych kątów żagla
+  if (windAngle >= 0 && windAngle < 35) {
+    // Strefa martwa - żagiel luźno, lub zaciągnięty w celu przygotowania do zwrotu
+    servoAngle = 90; // Przykładowo, minimalnie zaciągnięty
+  } else if (windAngle >= 45 && windAngle < 90) {
+    // Ostra żegluga - żagiel bardziej zaciągnięty
+    servoAngle = map(windAngle, 45, 90, 45, 90); // Mapowanie kąta wiatru na kąt serwa
+  } else if (windAngle >= 90 && windAngle < 135) {
+    // Wiatr boczny - żagiel coraz bardziej otwarty
+    servoAngle = map(windAngle, 90, 135, 90, 135);
+  } else { // windAngle >= 135 && windAngle <= 180
+    // Wiatr pełny / z rufy - żagiel maksymalnie otwarty
+    servoAngle = map(windAngle, 135, 180, 135, 170); // Ustawienie nieco mniej niż 180, aby uniknąć blokady
+  }
+
+  // Zapewnij, że kąt serwa mieści się w zakresie 0-180
+  servoAngle = constrain(servoAngle, 0, 180);
+  return servoAngle;
 }
