@@ -1,5 +1,17 @@
 #include <Servo.h>
 
+/*
+TODO:
+-skalowanie i modulo kąta obrotu impulsatora
+-regulator P dla kąta obortu
+-Maszyna stanów
+  - Sterowanie zwykle
+  - rufa lewy hals
+  - rufa prawy hals
+
+*/
+
+
 //To są piny do przerwań
 #define IMP_INT1 2
 #define IMP_INT2 3
