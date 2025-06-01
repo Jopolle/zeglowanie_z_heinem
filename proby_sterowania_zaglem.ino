@@ -8,7 +8,7 @@ TODO:
   - Sterowanie zwykle
   - rufa lewy hals
   - rufa prawy hals
-
+-dodać poprawkę na ster (jeżeli jest wolny pin PWM)
 */
 
 
@@ -35,10 +35,25 @@ long count = 0;
 long num = 0;
 
 
-volatile int encoderPos = 0; // Aktualna pozycja enkodera (0-19)
-int prevEncoderPos = 0;
 
-int windDirectionDegrees = 0; // 0-359 stopni
+int hals = 0;
+/*
+0 - prawy hals
+1 - lewy hals
+
+*/
+
+int stan_sterowania = 0;
+/*
+0 - manualne sterowanie
+1 - automatyczne sterowanie (bez zwrotu)
+2 - zwrot przez rufę lewy hals
+3 - zwrot przez rufę prawy hals
+*/
+
+
+volatile int encoderPos = 10; // Aktualna pozycja enkodera (0-19)
+int prevEncoderPos = 10;
 
 Servo sailServo;
 
@@ -66,10 +81,6 @@ void setup() {
 
 void loop() {
 
-  while (num != count) {
-    num = count;
-    Serial.println(num);
-  }
 
   unsigned long SW1_value = pulseIn(SW1, HIGH, 50000);  // Funkcja do odczytywania
   Serial.print(SW1_value);                                     // wypisuje wartość w mikrosekundach (1000–2000us)
@@ -79,15 +90,19 @@ void loop() {
 
   /*
   TODO:
-  # ogarnij jakie pozycje switcha robią co
-  # zaimplementuj zerowanie wiatrowskazu
+
+  -ogarnij jakie pozycje switcha robią co
+    -pozycja na silnik
+    -pozycja na jalowy
+    -pozycja zerująca wiatrowskaz
+
+  
   */
   if(SW1_value > 1200 && SW1_value < 1500){ // załączenie silnika
     digitalWrite(RELAY_PIN, HIGH);
   }
   else if(SW1_value > 1500){
     digitalWrite(RELAY_PIN, LOW);
-
   }
   else{
     digitalWrite(RELAY_PIN, LOW);
@@ -101,15 +116,42 @@ void loop() {
 
 
   unsigned long joy2_us = pulseIn(JOY2, HIGH, 50000);
+
+  if(SW2_value > 1200)  stan_sterowania = 0;
+  else stan_sterowania = 1;
+
+  switch(stan_sterowania){
+    case 0:
+      int angle2 = map(joy2_us, 1000, 2000, 0, 180);
+      angle2 = constrain(angle2, 0, 180);
+      sailServo.write(angle2); 
+      Serial.println("Reczne sterowanie zaglem");
+      //Serial.print("  JOY2 PWM: ");
+      //Serial.print(joy2_us);
+      //Serial.print(" -> Angle: ");
+      //Serial.println(angle2);
+      break;
+
+    case 1:
+      sailServo.write(calculateSailAngle());
+      Serial.println("Automatyczne sterowanie zaglem");
+    break;
+
+    case 2:
+    break;
+
+    case 3:
+    break;
+  }
+
+
+
   delay(20);
   
-    int angle2 = map(joy2_us, 1000, 2000, 0, 180);
-    angle2 = constrain(angle2, 0, 180);
-    sailServo.write(angle2); 
-    Serial.print("  JOY2 PWM: ");
-    Serial.print(joy2_us);
-    Serial.print(" -> Angle: ");
-    Serial.println(angle2);
+  int angle2 = map(joy2_us, 1000, 2000, 0, 180);
+  angle2 = constrain(angle2, 0, 180);
+  sailServo.write(angle2); 
+
   
   delay(20);  
 }
@@ -119,37 +161,21 @@ void obrot_lewo() {
     count++;
     encoderPos = (encoderPos + 1) % 20;
   }
+  
   time = millis();
 }
 
 void obrot_prawo() {
   if ((millis() - time) > 30){
     count--;
-    encoderPos = (encoderPos + 1) % 20;
+    encoderPos = (encoderPos - 1 + 20) % 20;
   }
   time = millis();
 }
 
 
-int calculateSailAngle(int windAngle) {
-  int servoAngle = 90;
-
-  // Tutaj wstaw logikę z tabeli optymalnych kątów żagla
-  if (windAngle >= 0 && windAngle < 35) {
-    // Strefa martwa - żagiel luźno, lub zaciągnięty w celu przygotowania do zwrotu
-    servoAngle = 90; // Przykładowo, minimalnie zaciągnięty
-  } else if (windAngle >= 45 && windAngle < 90) {
-    // Ostra żegluga - żagiel bardziej zaciągnięty
-    servoAngle = map(windAngle, 45, 90, 45, 90); // Mapowanie kąta wiatru na kąt serwa
-  } else if (windAngle >= 90 && windAngle < 135) {
-    // Wiatr boczny - żagiel coraz bardziej otwarty
-    servoAngle = map(windAngle, 90, 135, 90, 135);
-  } else { // windAngle >= 135 && windAngle <= 180
-    // Wiatr pełny / z rufy - żagiel maksymalnie otwarty
-    servoAngle = map(windAngle, 135, 180, 135, 170); // Ustawienie nieco mniej niż 180, aby uniknąć blokady
-  }
-
-  // Zapewnij, że kąt serwa mieści się w zakresie 0-180
+int calculateSailAngle() {
+  int servoAngle = map(encoderPos, 0, 19, 0, 180);
   servoAngle = constrain(servoAngle, 0, 180);
   return servoAngle;
 }
